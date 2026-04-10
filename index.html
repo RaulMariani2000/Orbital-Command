@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orbital Command | Worldwide Dashboard</title>
+    
+    <!-- Dependencies -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/satellite.js@7.0.0/dist/satellite.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        :root {
+            --bg-color: #020617;
+            --panel-bg: rgba(15, 23, 42, 0.7);
+            --accent-color: #38bdf8;
+            --accent-glow: rgba(56, 189, 248, 0.4);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 50% 50%, rgba(30, 58, 138, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(56, 189, 248, 0.1) 0%, transparent 30%);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .glass-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        /* Banner */
+        .global-banner {
+            background: linear-gradient(90deg, #1e293b, #0f172a);
+            border-bottom: 1px solid rgba(56, 189, 248, 0.2);
+            padding: 10px 0;
+            font-family: monospace;
+            text-align: center;
+        }
+        .banner-content { display: flex; align-items: center; justify-content: center; gap: 15px; font-size: 0.9rem; }
+        .banner-label { color: var(--text-secondary); font-weight: bold; }
+        .banner-mission { color: var(--accent-color); font-weight: 600; }
+        .banner-timer { background: rgba(56, 189, 248, 0.1); padding: 2px 10px; border-radius: 4px; border: 1px solid var(--accent-glow); color: var(--accent-color); font-weight: bold; }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; display: flex; flex-direction: column; gap: 24px; }
+        header { text-align: center; margin-bottom: 10px; }
+        header h1 { font-size: 2.5rem; letter-spacing: -0.02em; margin-bottom: 8px; }
+        header p { color: var(--text-secondary); font-size: 1.1rem; }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr;
+            grid-template-rows: auto auto;
+            gap: 24px;
+        }
+
+        /* Tracker Section */
+        .tracker-section { grid-column: 1; display: flex; flex-direction: column; gap: 16px; padding: 20px; }
+        .tracker-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+        .telemetry-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+        .telemetry-box { background: rgba(0,0,0,0.2); padding: 12px; border-radius: 12px; border: 1px solid var(--border-color); text-align: center; }
+        .telemetry-box.iss { border-color: rgba(56, 189, 248, 0.3); }
+        .telemetry-box.tiangong { border-color: rgba(239, 68, 68, 0.3); }
+        .coords { font-family: monospace; font-size: 1.1rem; display: flex; justify-content: center; gap: 15px; margin-top: 4px; }
+        #map { height: 450px; border-radius: 12px; border: 1px solid var(--border-color); z-index: 1; }
+
+        /* Sidebar Sections */
+        .sidebar { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-direction: column; gap: 24px; }
+        
+        .section-header { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color); margin-bottom: 16px; }
+        
+        /* Crew Manifest */
+        .crew-list { display: flex; flex-direction: column; gap: 12px; max-height: 480px; overflow-y: auto; padding-right: 8px; }
+        .crew-card { display: flex; align-items: center; gap: 16px; background: rgba(255, 255, 255, 0.03); padding: 12px; border-radius: 12px; border: 1px solid transparent; transition: all 0.2s; }
+        .crew-card:hover { border-color: var(--accent-glow); background: rgba(255, 255, 255, 0.05); }
+        .flag-box { width: 40px; height: 28px; border-radius: 4px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); }
+        .flag-box img { width: 100%; height: 100%; object-fit: cover; }
+        .crew-info { flex-grow: 1; }
+        .crew-name { font-weight: 600; display: block; }
+        .crew-craft { font-size: 0.8rem; color: var(--accent-color); text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; }
+
+        /* Launch Feed */
+        .launch-grid { display: flex; flex-direction: column; gap: 12px; }
+        .launch-card { background: rgba(255, 255, 255, 0.03); padding: 12px; border-radius: 12px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 4px; }
+        .launch-card.highlight { border-color: var(--accent-glow); background: rgba(56, 189, 248, 0.05); }
+        .launch-card h4 { font-size: 1rem; color: #fff; }
+        .launch-details { font-size: 0.75rem; color: var(--text-secondary); display: flex; justify-content: space-between; align-items: center; }
+        .tag { font-size: 0.65rem; padding: 1px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); color: #fff; }
+
+        /* APOD Section */
+        .apod-section { grid-column: 1; grid-row: 2; padding: 20px; }
+        .apod-media-container { width: 100%; max-height: 400px; border-radius: 12px; overflow: hidden; margin-top: 16px; background: #000; display: flex; justify-content: center; }
+        .apod-media-container img, .apod-media-container iframe { width: 100%; max-height: 400px; object-fit: contain; }
+        .apod-info { margin-top: 16px; }
+        .apod-title { font-size: 1.1rem; margin-bottom: 8px; }
+        .apod-desc { font-size: 0.9rem; color: var(--text-secondary); max-height: 100px; overflow-y: auto; }
+
+        @media (max-width: 1000px) {
+            .main-grid { grid-template-columns: 1fr; }
+            .sidebar { grid-column: 1; grid-row: auto; }
+            .apod-section { grid-column: 1; grid-row: auto; }
+        }
+
+        .station-marker-icon { border-radius: 50%; background: rgba(15, 23, 42, 0.9); display: flex; align-items: center; justify-content: center; border: 2px solid; box-shadow: 0 0 10px currentColor; }
+    </style>
+</head>
+<body>
+
+    <div class="global-banner">
+        <div class="banner-content" id="top-banner">
+            <i data-lucide="clock" size="16"></i>
+            <span class="banner-label">SYNCING WORLDWIDE TELEMETRY...</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1>Orbital Command</h1>
+            <p>Real-time telemetry and worldwide space feeds</p>
+        </header>
+
+        <main class="main-grid">
+            <section class="glass-panel tracker-section">
+                <div class="tracker-header">
+                    <i data-lucide="rocket" style="color: var(--accent-color)"></i>
+                    <h2>Live Tracking</h2>
+                </div>
+                
+                <div class="telemetry-grid">
+                    <div class="telemetry-box iss">
+                        <span style="font-size: 0.7rem; color: var(--text-secondary); font-weight: bold;">ISS (BLUE)</span>
+                        <div class="coords" id="iss-coords">FETCHING...</div>
+                    </div>
+                    <div class="telemetry-box tiangong">
+                        <span style="font-size: 0.7rem; color: var(--text-secondary); font-weight: bold;">TIANGONG (RED)</span>
+                        <div class="coords" id="tg-coords">PROPAGATING...</div>
+                    </div>
+                </div>
+
+                <div id="map"></div>
+            </section>
+
+            <aside class="sidebar">
+                <section class="glass-panel" style="padding: 20px;">
+                    <div class="section-header">
+                        <i data-lucide="users" style="color: #a78bfa"></i>
+                        <h2>Crew Manifest</h2>
+                    </div>
+                    <div class="crew-list" id="crew-list"></div>
+                </section>
+
+                <section class="glass-panel" style="padding: 20px;">
+                    <div class="section-header">
+                        <i data-lucide="send" style="color: #34d399"></i>
+                        <h2>Worldwide Launches</h2>
+                    </div>
+                    <div class="launch-grid" id="launch-feed"></div>
+                </section>
+            </aside>
+
+            <section class="glass-panel apod-section">
+                <div class="section-header" style="border:none">
+                    <i data-lucide="camera" style="color: #fca5a5"></i>
+                    <h2>Astronomy Feed</h2>
+                </div>
+                <div id="apod-content">
+                    <div class="apod-media-container" id="apod-media"></div>
+                    <div class="apod-info">
+                        <h3 class="apod-title" id="apod-title">Downloading mission data...</h3>
+                        <p class="apod-desc" id="apod-desc"></p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // Initialize Icons
+        lucide.createIcons();
+
+        // 1. Map & Stations
+        const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([0, 0], 2);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+
+        const createIcon = (color) => L.divIcon({
+            html: `<div class="station-marker-icon" style="border-color: ${color}; color: ${color}; width: 32px; height: 32px;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20"></path><path d="M2 12h20"></path><circle cx="12" cy="12" r="4" fill="#0f172a"></circle></svg>
+                   </div>`,
+            className: '', iconSize: [32, 32], iconAnchor: [16, 16]
+        });
+
+        const issMarker = L.marker([0, 0], { icon: createIcon('#38bdf8') }).addTo(map);
+        const tgMarker = L.marker([0, 0], { icon: createIcon('#ef4444') }).addTo(map);
+
+        async function updateStations() {
+            // ISS - Switch to HTTPS-native API (Where the ISS at)
+            try {
+                const res = await fetch('https://api.wheretheiss.at/v1/satellites/25544');
+                const data = await res.json();
+                const pos = [data.latitude, data.longitude];
+                issMarker.setLatLng(pos);
+                document.getElementById('iss-coords').innerText = `${pos[0].toFixed(2)}°N ${pos[1].toFixed(2)}°E`;
+                map.panTo(pos);
+            } catch(e) { console.error("ISS error", e); }
+
+            // Tiangong - Constant TLE Propagation
+            try {
+                const res = await fetch('https://celestrak.org/NORAD/elements/gp.php?CATNR=48274&FORMAT=TLE');
+                const text = await res.text();
+                const lines = text.trim().split('\n');
+                if (lines.length >= 3) {
+                    const satrec = satellite.twoline2satrec(lines[1], lines[2]);
+                    const posAndVel = satellite.propagate(satrec, new Date());
+                    const gmst = satellite.gstime(new Date());
+                    const posGd = satellite.eciToGeodetic(posAndVel.position, gmst);
+                    const lat = satellite.degreesLat(posGd.latitude);
+                    const lng = satellite.degreesLong(posGd.longitude);
+                    tgMarker.setLatLng([lat, lng]);
+                    document.getElementById('tg-coords').innerText = `${lat.toFixed(2)}°N ${lng.toFixed(2)}°E`;
+                }
+            } catch(e) { console.error("TG error", e); }
+        }
+        setInterval(updateStations, 5000);
+        updateStations();
+
+        // 2. Banner & Feed (Switch to Worldwide RocketLaunch.live)
+        async function fetchLaunches() {
+            try {
+                // Fetching worldwide launches (Next 5)
+                const res = await fetch('https://fdo.rocketlaunch.live/json/launches/next/5');
+                const data = await res.json();
+                const launches = data.result;
+                
+                // Top Banner (Next absolute launch)
+                const main = launches[0];
+                const banner = document.getElementById('top-banner');
+                const updateTimer = () => {
+                    const diff = main.t0_timestamp * 1000 - new Date().getTime();
+                    if (diff < 0) { banner.innerText = "LIFTOFF: " + main.name; return; }
+                    const d = Math.floor(diff/86400000), h = Math.floor((diff%86400000)/3600000), m = Math.floor((diff%3600000)/60000), s = Math.floor((diff%60000)/1000);
+                    banner.innerHTML = `<i data-lucide="clock" size="16"></i> <span class="banner-label">NEXT GLOBAL LAUNCH:</span> <span class="banner-mission">${main.name}</span> <span class="banner-timer">${d}d ${h}h ${m}m ${s}s</span>`;
+                    lucide.createIcons();
+                };
+                setInterval(updateTimer, 1000);
+                updateTimer();
+
+                // Detailed Feed
+                const feed = document.getElementById('launch-feed');
+                feed.innerHTML = launches.map((l, i) => `
+                    <div class="launch-card ${i===0?'highlight':''}">
+                        <h4>${l.name}</h4>
+                        <div class="launch-details">
+                            <span>${l.vehicle.name}</span>
+                            <span class="tag">${l.provider.name}</span>
+                        </div>
+                        <p style="font-size: 0.7rem; color: var(--text-secondary); margin-top:4px">${new Date(l.t0_timestamp * 1000).toLocaleString()}</p>
+                    </div>
+                `).join('');
+            } catch(e) { console.error("Launch error", e); }
+        }
+        fetchLaunches();
+
+        // 3. Crew Manifest
+        async function updateCrew() {
+            try {
+                const proxyUrl = 'https://api.allorigins.win/raw?url=';
+                const targetUrl = encodeURIComponent('http://api.open-notify.org/astros.json');
+                const res = await fetch(proxyUrl + targetUrl);
+                const data = await res.json();
+                
+                const artemis = [
+                    { name: "Reid Wiseman", craft: "Artemis II" },
+                    { name: "Victor Glover", craft: "Artemis II" },
+                    { name: "Christina Koch", craft: "Artemis II" },
+                    { name: "Jeremy Hansen", craft: "Artemis II" }
+                ];
+                const all = [...data.people, ...artemis];
+                const getFlag = (n) => {
+                    if (['Oleg', 'Nikolai', 'Grebenkin'].some(x => n.includes(x))) return 'ru';
+                    if (['Li', 'Ye', 'Guangsu', 'Cong', 'Guangfu'].some(x => n.includes(x))) return 'cn';
+                    if (n.includes('Jeremy') || n.includes('Hansen')) return 'ca';
+                    return 'us';
+                };
+                
+                document.getElementById('crew-list').innerHTML = all.map(p => `
+                    <div class="crew-card">
+                        <div class="flag-box"><img src="https://flagcdn.com/w80/${getFlag(p.name)}.png"></div>
+                        <div class="crew-info">
+                            <span class="crew-name">${p.name}</span>
+                            <span class="crew-craft">${p.craft}</span>
+                        </div>
+                    </div>
+                `).join('');
+            } catch(e) {}
+        }
+        updateCrew();
+
+        // 4. APOD
+        async function updateAPOD() {
+            try {
+                const res = await fetch('https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY');
+                const data = await res.json();
+                document.getElementById('apod-title').innerText = data.title;
+                document.getElementById('apod-desc').innerText = data.explanation;
+                const media = document.getElementById('apod-media');
+                if (data.media_type === 'video') {
+                    media.innerHTML = `<iframe src="${data.url}" frameborder="0" allowfullscreen></iframe>`;
+                } else {
+                    media.innerHTML = `<img src="${data.url}" alt="${data.title}">`;
+                }
+            } catch(e) {}
+        }
+        updateAPOD();
+    </script>
+</body>
+</html>
